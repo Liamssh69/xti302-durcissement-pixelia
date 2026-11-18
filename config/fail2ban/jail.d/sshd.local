@@ -1,0 +1,11 @@
+# J1 - protection SSH par fail2ban
+# Debian 13 : pas de auth.log, on lit les logs dans journald (backend systemd)
+[sshd]
+enabled  = true
+backend  = systemd
+# 5 echecs en 10 minutes = banni 15 minutes
+maxretry = 5
+findtime = 10m
+bantime  = 15m
+# fail2ban met ses regles dans sa propre table nftables (inet f2b-table)
+banaction = nftables-multiport
