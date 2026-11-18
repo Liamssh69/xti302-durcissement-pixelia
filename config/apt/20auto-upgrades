@@ -1,0 +1,4 @@
+// D1 - mises a jour de securite automatiques
+// tous les jours : on met a jour la liste des paquets puis unattended-upgrades installe les maj de securite
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
