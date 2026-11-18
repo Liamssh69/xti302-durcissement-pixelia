@@ -214,6 +214,52 @@ test_S5() {
 }
 
 
+test_J1() {
+    systemctl is-active --quiet fail2ban
+    resultat "J1" "fail2ban est lance"
+    fail2ban-client status sshd > /dev/null 2>&1
+    resultat "J1" "la prison sshd de fail2ban est active"
+    essais=$(fail2ban-client get sshd maxretry 2> /dev/null)
+    [ -n "$essais" ] && [ "$essais" -le 10 ]
+    resultat "J1" "ban apres $essais echecs"
+}
+
+test_J2() {
+    nft list chain inet filtre entree 2> /dev/null | grep -q "policy drop"
+    resultat "J2" "politique par defaut du pare-feu : drop"
+    nft list chain inet filtre entree 2> /dev/null | grep -q "tcp dport 22 accept"
+    resultat "J2" "SSH autorise dans le pare-feu"
+    nft list chain inet filtre entree 2> /dev/null | grep -q "ct state established,related accept"
+    resultat "J2" "connexions deja etablies autorisees"
+    systemctl is-enabled --quiet nftables
+    resultat "J2" "le pare-feu se relance au demarrage"
+}
+
+test_J3() {
+    grep -qs "^Storage=persistent" /etc/systemd/journald.conf.d/*.conf
+    resultat "J3" "journald configure en persistant"
+    [ -d /var/log/journal ] && [ -n "$(ls -A /var/log/journal)" ]
+    resultat "J3" "le journal est bien ecrit sur le disque (/var/log/journal)"
+}
+
+test_J4() {
+    [ -x /usr/local/sbin/analyse_logs.sh ]
+    resultat "J4" "analyse_logs.sh est installe"
+    /usr/local/sbin/analyse_logs.sh 999999 > /dev/null 2>&1
+    resultat "J4" "analyse_logs.sh renvoie 0 sous le seuil"
+    /usr/local/sbin/analyse_logs.sh abc > /dev/null 2>&1
+    [ $? -eq 1 ]
+    resultat "J4" "analyse_logs.sh refuse un seuil invalide"
+}
+
+test_D1() {
+    dpkg -s unattended-upgrades > /dev/null 2>&1
+    resultat "D1" "unattended-upgrades est installe"
+    apt-config dump | grep -q 'APT::Periodic::Unattended-Upgrade "1"'
+    resultat "D1" "les mises a jour automatiques sont activees"
+}
+
+
 test_C1
 test_C2
 test_C3
@@ -223,6 +269,11 @@ test_S2
 test_S3
 test_S4
 test_S5
+test_J1
+test_J2
+test_J3
+test_J4
+test_D1
 
 echo "--- $reussis / $total tests reussis"
 

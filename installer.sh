@@ -1,7 +1,7 @@
 #!/bin/bash
 # installer.sh
 # Remet toute la config sur la VM vierge (a lancer depuis le dossier du depot)
-# Pour l'instant : seance 3 (C1 a C4, S1 a S5)
+# Seance 3 (C1 a C4, S1 a S5) + seance 4 (J1 a J4, D1)
 # Lancement : sudo ./installer.sh
 
 set -euo pipefail
@@ -16,7 +16,7 @@ cd "$(dirname "$0")"
 
 # --- paquets ---
 # on passe par apt seulement si un paquet manque (le wifi de l'ecole bloque souvent)
-for paquet in sudo openssh-server acl; do
+for paquet in sudo openssh-server acl nftables fail2ban python3-systemd unattended-upgrades; do
     if ! dpkg -s "$paquet" > /dev/null 2>&1; then
         apt-get update || true
         apt-get install -y "$paquet"
@@ -71,5 +71,35 @@ if ! sshd -t; then
     exit 1
 fi
 systemctl restart ssh
+
+
+# --- journal persistant (J3) ---
+mkdir -p /etc/systemd/journald.conf.d /var/log/journal
+cp config/journald.conf.d/persistant.conf /etc/systemd/journald.conf.d/
+systemctl restart systemd-journald
+
+
+# --- pare-feu (J2) ---
+# nft -c = on verifie la syntaxe sans appliquer
+if ! nft -c -f config/nftables.conf; then
+    echo "Erreur : config nftables invalide" >&2
+    exit 1
+fi
+cp config/nftables.conf /etc/nftables.conf
+systemctl enable nftables
+systemctl restart nftables
+
+
+# --- fail2ban (J1) ---
+# on le redemarre APRES nftables pour qu'il remette sa table
+cp config/fail2ban/jail.d/sshd.local /etc/fail2ban/jail.d/
+systemctl enable fail2ban
+systemctl restart fail2ban
+
+
+# --- mises a jour automatiques (D1) ---
+cp config/apt/20auto-upgrades /etc/apt/apt.conf.d/20auto-upgrades
+systemctl enable apt-daily.timer apt-daily-upgrade.timer
+
 
 echo "installation terminee, lancer : sudo ./verifier.sh"
