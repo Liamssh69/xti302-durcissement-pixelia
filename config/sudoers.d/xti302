@@ -1,0 +1,5 @@
+# C3 - droits sudo du projet XTI302 (contexte A Pixelia)
+# Les administrateurs (groupe admins) ont tous les droits, avec leur mot de passe
+%admins ALL=(ALL:ALL) ALL
+# Le compte support ne peut lancer QUE analyse_logs.sh en root
+support ALL=(root) NOPASSWD: /usr/local/sbin/analyse_logs.sh
