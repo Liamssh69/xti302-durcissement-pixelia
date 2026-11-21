@@ -260,6 +260,74 @@ test_D1() {
 }
 
 
+test_B1() {
+    mountpoint -q /sauvegardes && grep -q "LABEL=sauvegardes" /etc/fstab
+    resultat "B1" "le 2e disque est monte sur /sauvegardes (et dans fstab)"
+    [ -x /usr/local/sbin/sauvegarde.sh ] && [ "$(stat -c %U /usr/local/sbin/sauvegarde.sh)" = "root" ]
+    resultat "B1" "sauvegarde.sh est installe et appartient a root"
+
+    nb=$(ls -d /sauvegardes/20* 2> /dev/null | wc -l)
+    [ "$nb" -ge 1 ]
+    resultat "B1" "il y a au moins une version datee ($nb)"
+    [ "$nb" -le 7 ]
+    resultat "B1" "pas plus de 7 versions gardees"
+
+    [ -f /sauvegardes/derniere/etc/hostname ] && [ -d /sauvegardes/derniere/srv/projets ]
+    resultat "B1" "/etc et /srv sont dans la derniere sauvegarde"
+
+    getfacl -c /sauvegardes/derniere/srv/projets 2> /dev/null | grep -q "^group:dev:rwx"
+    resultat "B1" "les ACL sont conservees dans la sauvegarde"
+
+    # incremental : un fichier qui a pas change = meme inode (lien dur) dans les 2 dernieres versions
+    if [ "$nb" -ge 2 ]; then
+        v1=$(ls -d /sauvegardes/20* | tail -n 2 | head -n 1)
+        v2=$(ls -d /sauvegardes/20* | tail -n 1)
+        [ "$(stat -c %i "$v1/etc/hostname")" = "$(stat -c %i "$v2/etc/hostname")" ]
+        resultat "B1" "sauvegarde incrementale (fichiers inchanges pas recopies)"
+    else
+        ko "B1" "sauvegarde incrementale : lancer sauvegarde.sh 2 fois pour tester"
+    fi
+}
+
+test_B2() {
+    systemctl is-enabled --quiet sauvegarde.timer && systemctl is-active --quiet sauvegarde.timer
+    resultat "B2" "la sauvegarde est planifiee (sauvegarde.timer)"
+    [ -s /var/log/sauvegarde.log ]
+    resultat "B2" "les sauvegardes sont journalisees (/var/log/sauvegarde.log)"
+}
+
+test_B3() {
+    [ "$(stat -c '%U:%G %a' /sauvegardes)" = "root:admins 750" ]
+    resultat "B3" "/sauvegardes en root:admins 750"
+    ! sudo -u support test -r /sauvegardes && ! sudo -u "$DEV" test -r /sauvegardes
+    resultat "B3" "support et dev ne peuvent pas lire les sauvegardes"
+}
+
+test_D2() {
+    # on enleve : SSH (22), ce qui ecoute que en local, et les clients DHCP (68 en IPv4, 546 en IPv6)
+    # qui servent a la VM pour recuperer son adresse IP
+    autres=$(ss -tulnH | awk '{print $5}' | grep -vE ":22$|^127\.|^\[::1\]|:68$|:546$" | tr '\n' ' ')
+    [ -z "$autres" ]
+    resultat "D2" "aucun service joignable a part SSH $autres"
+}
+
+test_D3() {
+    # -xdev : on reste sur le disque systeme (pas /proc, /sys...), -type f : vrais fichiers (pas les liens)
+    modifiables=$(find / -xdev -type f -perm -0002 ! -path "/tmp/*" ! -path "/var/tmp/*" 2> /dev/null)
+    [ -z "$modifiables" ]
+    resultat "D3" "aucun fichier modifiable par tous hors /tmp ${modifiables:+($modifiables)}"
+
+    # les fichiers SUID doivent etre ceux qu'on a listes et expliques dans le dossier
+    if [ -f config/suid_autorises.txt ]; then
+        en_trop=$(find / -xdev -type f -perm -4000 2> /dev/null | sort | comm -23 - <(sort config/suid_autorises.txt))
+        [ -z "$en_trop" ]
+        resultat "D3" "pas de fichier SUID inconnu ${en_trop:+($en_trop)}"
+    else
+        ko "D3" "config/suid_autorises.txt manquant"
+    fi
+}
+
+
 test_C1
 test_C2
 test_C3
@@ -274,6 +342,11 @@ test_J2
 test_J3
 test_J4
 test_D1
+test_B1
+test_B2
+test_B3
+test_D2
+test_D3
 
 echo "--- $reussis / $total tests reussis"
 
