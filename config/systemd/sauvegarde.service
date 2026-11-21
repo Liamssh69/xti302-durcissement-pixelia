@@ -1,0 +1,8 @@
+# B2 - le service qui lance la sauvegarde (declenche par sauvegarde.timer)
+[Unit]
+Description=Sauvegarde de /srv et /etc sur le 2e disque
+RequiresMountsFor=/sauvegardes
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sauvegarde.sh

@@ -1,0 +1,10 @@
+# B2 - tous les jours a 3h15 (si la VM etait eteinte ca se lance au demarrage suivant)
+[Unit]
+Description=Sauvegarde quotidienne
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
