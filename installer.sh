@@ -1,10 +1,13 @@
 #!/bin/bash
 # installer.sh
 # Remet toute la config sur la VM vierge (a lancer depuis le dossier du depot)
-# Seance 3 (C1 a C4, S1 a S5) + seance 4 (J1 a J4, D1)
+# Seance 3 (C1 a C4, S1 a S5) + seance 4 (J1 a J4, D1) + seance 5 (B1 a B3)
 # Lancement : sudo ./installer.sh
 
 set -euo pipefail
+
+# le 2e disque pour les sauvegardes (verifier avec lsblk)
+DISQUE=/dev/sdb
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "Erreur : ce script doit etre lance en root" >&2
@@ -16,7 +19,7 @@ cd "$(dirname "$0")"
 
 # --- paquets ---
 # on passe par apt seulement si un paquet manque (le wifi de l'ecole bloque souvent)
-for paquet in sudo openssh-server acl nftables fail2ban python3-systemd unattended-upgrades; do
+for paquet in sudo openssh-server acl nftables fail2ban python3-systemd unattended-upgrades rsync; do
     if ! dpkg -s "$paquet" > /dev/null 2>&1; then
         apt-get update || true
         apt-get install -y "$paquet"
@@ -100,6 +103,38 @@ systemctl restart fail2ban
 # --- mises a jour automatiques (D1) ---
 cp config/apt/20auto-upgrades /etc/apt/apt.conf.d/20auto-upgrades
 systemctl enable apt-daily.timer apt-daily-upgrade.timer
+
+
+# --- 2e disque pour les sauvegardes (B1, B3) ---
+# on formate SEULEMENT s'il y a pas deja un systeme de fichiers dessus,
+# sinon relancer installer.sh effacerait toutes les sauvegardes
+if [ ! -b "$DISQUE" ]; then
+    echo "Erreur : disque $DISQUE introuvable" >&2
+    exit 1
+fi
+if ! blkid "$DISQUE" > /dev/null; then
+    mkfs.ext4 -L sauvegardes "$DISQUE"
+fi
+mkdir -p /sauvegardes
+# on monte par le label pour que ca marche meme si le nom du disque change
+# nofail : si le disque est absent la VM demarre quand meme
+if ! grep -q "LABEL=sauvegardes" /etc/fstab; then
+    echo "LABEL=sauvegardes /sauvegardes ext4 defaults,nofail 0 2" >> /etc/fstab
+fi
+systemctl daemon-reload
+mountpoint -q /sauvegardes || mount /sauvegardes
+# B3 : seulement root et les admins
+chown root:admins /sauvegardes
+chmod 750 /sauvegardes
+
+
+# --- script de sauvegarde + planification (B1, B2) ---
+cp sauvegarde.sh /usr/local/sbin/sauvegarde.sh
+chown root:root /usr/local/sbin/sauvegarde.sh
+chmod 755 /usr/local/sbin/sauvegarde.sh
+cp config/systemd/sauvegarde.service config/systemd/sauvegarde.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now sauvegarde.timer
 
 
 echo "installation terminee, lancer : sudo ./verifier.sh"
