@@ -304,9 +304,11 @@ test_B3() {
 }
 
 test_D2() {
-    # on enleve : SSH (22), ce qui ecoute que en local, et les clients DHCP (68 en IPv4, 546 en IPv6)
-    # qui servent a la VM pour recuperer son adresse IP
-    autres=$(ss -tulnH | awk '{print $5}' | grep -vE ":22$|^127\.|^\[::1\]|:68$|:546$" | tr '\n' ' ')
+    # on enleve : SSH (22), ce qui ecoute que en local (127.0.0.1, ::1)
+    # et le client DHCP (dhclient) : il sert a la VM a recuperer son IP, il ouvre le port 68
+    # et parfois un port au hasard. Il ne propose aucun service, et le pare-feu bloque tout sauf le 22.
+    autres=$(ss -tulnpH | grep -vE '"(dhclient|dhcpcd|systemd-network)"' | awk '{print $5}' \
+        | grep -vE ":22$|^127\.|^\[::1\]|:68$|:546$" | tr '\n' ' ')
     [ -z "$autres" ]
     resultat "D2" "aucun service joignable a part SSH $autres"
 }
