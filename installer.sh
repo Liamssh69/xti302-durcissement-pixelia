@@ -112,8 +112,11 @@ if [ ! -b "$DISQUE" ]; then
     echo "Erreur : disque $DISQUE introuvable" >&2
     exit 1
 fi
-if ! blkid "$DISQUE" > /dev/null; then
-    mkfs.ext4 -L sauvegardes "$DISQUE"
+# on regarde le TYPE de systeme de fichiers (une simple table de partitions ne compte pas)
+if [ -z "$(blkid -o value -s TYPE "$DISQUE")" ]; then
+    wipefs -a "$DISQUE"
+    mkfs.ext4 -F -L sauvegardes "$DISQUE"
+    udevadm settle
 fi
 mkdir -p /sauvegardes
 # on monte par le label pour que ca marche meme si le nom du disque change
