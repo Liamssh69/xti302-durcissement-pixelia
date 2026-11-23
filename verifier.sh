@@ -58,6 +58,7 @@ test_C1() {
     # chaque compte du csv existe et a les bons groupes
     erreur=0
     while IFS=';' read -r login _ groupe autres; do
+        [ -z "$login" ] && continue
         if ! id "$login" > /dev/null 2>&1; then
             ko "C1" "le compte $login n'existe pas"
             erreur=1
@@ -73,7 +74,7 @@ test_C1() {
                 erreur=1
             fi
         done
-    done < <(tail -n +2 "$CSV" | tr -d '\r')
+    done < <(sed '$a\' "$CSV" | tail -n +2 | tr -d '\r')
     if [ $erreur -eq 0 ]; then
         ok "C1" "tous les comptes du CSV existent avec les bons groupes"
     fi
@@ -304,10 +305,14 @@ test_B3() {
 }
 
 test_D2() {
-    # on enleve : SSH (22), ce qui ecoute que en local (127.0.0.1, ::1)
-    # et le client DHCP (dhclient) : il sert a la VM a recuperer son IP, il ouvre le port 68
-    # et parfois un port au hasard. Il ne propose aucun service, et le pare-feu bloque tout sauf le 22.
-    autres=$(ss -tulnpH | grep -vE '"(dhclient|dhcpcd|systemd-network)"' | awk '{print $5}' \
+    # on enleve :
+    # - SSH (22) et ce qui ecoute que en local (127.0.0.1, ::1)
+    # - le client DHCP (68 en IPv4, 546 en IPv6) qui sert a la VM a recuperer son IP
+    # - les ports UDP "ephemeres" (32768 et plus) : ce sont des CLIENTS qui ouvrent un port
+    #   au hasard le temps d'une requete (DNS, synchro de l'heure...), pas des services.
+    #   De toute facon le pare-feu bloque tout ce qui arrive sauf le port 22.
+    autres=$(ss -tulnH | awk '{ n = split($5, a, ":"); port = a[n];
+                               if (!($1 == "udp" && port >= 32768)) print $5 }' \
         | grep -vE ":22$|^127\.|^\[::1\]|:68$|:546$" | tr '\n' ' ')
     [ -z "$autres" ]
     resultat "D2" "aucun service joignable a part SSH $autres"

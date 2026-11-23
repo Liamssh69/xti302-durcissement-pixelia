@@ -105,8 +105,9 @@ for g in admins support acces_ssh dev design commercial freelance; do
 done
 
 # --- 2. les utilisateurs ---
+# sed '$a\' ajoute un retour a la ligne a la fin s'il manque (sinon la derniere ligne est ignoree)
 # tail -n +2 pour sauter la ligne d'en-tete, tr pour enlever les \r si le csv vient de windows
-tail -n +2 "$CSV" | tr -d '\r' | while IFS=';' read -r login nom groupe autres; do
+sed '$a\' "$CSV" | tail -n +2 | tr -d '\r' | while IFS=';' read -r login nom groupe autres; do
     if [ -n "$login" ]; then
         creer_utilisateur "$login" "$nom" "$groupe" "$autres"
     fi

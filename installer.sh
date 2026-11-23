@@ -136,5 +136,10 @@ cp config/systemd/sauvegarde.service config/systemd/sauvegarde.timer /etc/system
 systemctl daemon-reload
 systemctl enable --now sauvegarde.timer
 
+# premiere sauvegarde si y'en a encore aucune
+if ! ls -d /sauvegardes/20* > /dev/null 2>&1; then
+    /usr/local/sbin/sauvegarde.sh
+fi
+
 
 echo "installation terminee, lancer : sudo ./verifier.sh"
